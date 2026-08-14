@@ -63,7 +63,7 @@ export function NewMeetingScreen({ settings, models, onBack, onStart }: NewMeeti
         </Field>
 
         <Field label="Capture mode" detail="Guided demo works in Expo Go. On-device audio requires a native build and downloaded models.">
-          <SegmentedControl value={runtime} options={[{ value: 'demo', label: 'Guided demo' }, { value: 'native', label: 'On-device audio' }]} onChange={setRuntime} />
+          <SegmentedControl<RuntimeKind> value={runtime} options={[{ value: 'demo', label: 'Guided demo' }, { value: 'native', label: 'On-device audio' }]} onChange={setRuntime} />
           {runtime === 'native' ? (
             <View style={styles.readiness}>
               <ReadinessRow label="Speech model" ready={Boolean(speech?.installed)} detail={speech?.title ?? 'No active speech model'} />
@@ -78,7 +78,7 @@ export function NewMeetingScreen({ settings, models, onBack, onStart }: NewMeeti
         </Field>
 
         <Field label="Translation">
-          <SegmentedControl value={translationMode} options={[{ value: 'off', label: 'Keep original only' }, { value: 'english', label: 'Add English' }]} onChange={setTranslationMode} />
+          <SegmentedControl<TranslationMode> value={translationMode} options={[{ value: 'off', label: 'Keep original only' }, { value: 'english', label: 'Add English' }]} onChange={setTranslationMode} />
         </Field>
 
         <Field label="Live keywords" detail="Comma-separated terms are highlighted deterministically in the transcript.">

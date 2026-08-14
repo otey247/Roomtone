@@ -81,7 +81,7 @@ export function MeetingDetailScreen({ meeting, onBack, onRenameSpeaker, onDelete
     <View style={styles.root}>
       <TopBar title={meeting.title} subtitle={formatMeetingDate(meeting.startedAt)} onBack={onBack} actionLabel="Copy" onAction={() => void copy()} />
       <View style={styles.tabWrap}>
-        <SegmentedControl value={tab} options={[{ value: 'summary', label: 'Summary' }, { value: 'transcript', label: `Transcript · ${meeting.segments.length}` }]} onChange={setTab} />
+        <SegmentedControl<DetailTab> value={tab} options={[{ value: 'summary', label: 'Summary' }, { value: 'transcript', label: `Transcript · ${meeting.segments.length}` }]} onChange={setTab} />
       </View>
 
       {tab === 'transcript' ? (

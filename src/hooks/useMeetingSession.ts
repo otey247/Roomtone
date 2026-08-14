@@ -15,8 +15,8 @@ export function useMeetingSession(onPersisted: (meeting: Meeting) => void, audio
   const [runtimeDetail, setRuntimeDetail] = useState<string>();
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState<string>();
-  const meetingRef = useRef<Meeting>();
-  const runtimeRef = useRef<MeetingRuntime>();
+  const meetingRef = useRef<Meeting | undefined>(undefined);
+  const runtimeRef = useRef<MeetingRuntime | undefined>(undefined);
   const persistChainRef = useRef<Promise<void>>(Promise.resolve());
 
   const commit = useCallback((next: Meeting, event?: Parameters<typeof appendMeetingEvent>[1]) => {

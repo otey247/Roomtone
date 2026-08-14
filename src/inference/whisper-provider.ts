@@ -43,10 +43,12 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
   }
 
   async start(options: RuntimeStartOptions): Promise<void> {
-    if (!options.speechModel?.installed || !options.speechModel.localUri) {
+    const speechModel = options.speechModel;
+    const vadModel = options.vadModel;
+    if (!speechModel?.installed || !speechModel.localUri) {
       throw new Error('Install and select a local speech model before recording.');
     }
-    if (!options.vadModel?.installed || !options.vadModel.localUri) {
+    if (!vadModel?.installed || !vadModel.localUri) {
       throw new Error('Install the voice activity model before recording.');
     }
     this.callbacks = options.callbacks;
@@ -59,7 +61,7 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
     this.speakerTurn = 1;
     this.sourceLanguage = options.meeting.sourceLanguage;
     this.translateToEnglish = options.meeting.translationMode === 'english';
-    this.supportsSpeakerTurns = options.speechModel.supportsSpeakerTurns;
+    this.supportsSpeakerTurns = speechModel.supportsSpeakerTurns;
     this.callbacks.onStatus('preparing', 'Loading local speech models');
 
     const audio = await import('expo-audio');
@@ -71,9 +73,11 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
       allowsBackgroundRecording: true
     });
 
+    const whisperModuleId: string = 'whisper.rn';
+    const realtimeModuleId: string = 'whisper.rn/realtime-transcription';
     const [{ initWhisper, initWhisperVad }, realtimeModule, fsModule] = await Promise.all([
-      import('whisper.rn'),
-      import('whisper.rn/realtime-transcription'),
+      import(whisperModuleId),
+      import(realtimeModuleId),
       import('react-native-fs')
     ]);
     const RNFS = (fsModule.default ?? fsModule) as typeof import('react-native-fs');
@@ -82,11 +86,11 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
     this.audioUri = `file://${meetingDirectory}/${this.meetingId}.wav`;
 
     this.whisperContext = await initWhisper({
-      filePath: options.speechModel.localUri,
+      filePath: speechModel.localUri,
       useGpu: true
     }) as unknown as typeof this.whisperContext;
     this.vadContext = await initWhisperVad({
-      filePath: options.vadModel.localUri,
+      filePath: vadModel.localUri,
       useGpu: true,
       nThreads: 4
     }) as unknown as typeof this.vadContext;
@@ -130,8 +134,8 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
           this.audioBySlice.set(sliceIndex, audioData);
           return true;
         },
-        onTranscribe: (event: RealtimeEvent) => this.handleRealtimeEvent(event, options.speechModel),
-        onSliceTranscriptionStabilized: (text: string) => this.handleStableText(text, options.speechModel),
+        onTranscribe: (event: RealtimeEvent) => this.handleRealtimeEvent(event, speechModel),
+        onSliceTranscriptionStabilized: (text: string) => this.handleStableText(text, speechModel),
         onVad: (event: { confidence?: number; type?: string }) => {
           const level = event.type === 'silence' ? 0.04 : Math.max(0.12, Math.min(1, event.confidence ?? 0.45));
           this.callbacks?.onAudioLevel(level);

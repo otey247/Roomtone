@@ -47,7 +47,7 @@ export function LiveMeetingScreen({
   useEffect(() => {
     if (!keepScreenAwake) return undefined;
     void activateKeepAwakeAsync('roomtone-live');
-    return () => deactivateKeepAwake('roomtone-live');
+    return () => { void deactivateKeepAwake('roomtone-live'); };
   }, [keepScreenAwake]);
 
   const elapsed = meeting ? Math.max(0, now - new Date(meeting.startedAt).getTime()) : 0;
