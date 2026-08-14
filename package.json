@@ -28,7 +28,7 @@
     "expo-keep-awake": "~56.0.3",
     "expo-print": "~56.0.4",
     "expo-sharing": "~56.0.22",
-    "expo-splash-screen": "~56.0.14",
+    "expo-splash-screen": "~57.0.6",
     "expo-sqlite": "~56.0.5",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
