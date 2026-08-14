@@ -1,0 +1,26 @@
+appId: com.otey247.roomtone.preview
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Meetings that remember."
+- tapOn: "Start a meeting"
+- assertVisible: "Prepare the room."
+- tapOn:
+    text: "Architecture review"
+- inputText: "Samsung S24 Ultra smoke test"
+- tapOn: "Everyone has been notified"
+- tapOn: "Start meeting"
+- extendedWaitUntil:
+    visible: "LIVE"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "security"
+    timeout: 30000
+- tapOn: "Bookmark"
+- tapOn: "End meeting"
+- extendedWaitUntil:
+    visible: "Outcome completeness"
+    timeout: 20000
+- assertVisible: "Samsung S24 Ultra smoke test"
+- assertVisible: "Decisions"
+- assertVisible: "Actions"

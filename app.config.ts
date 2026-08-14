@@ -1,24 +1,46 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
+const variant = process.env.ROOMTONE_APP_VARIANT === 'preview' ? 'preview' : 'production';
+const isPreview = variant === 'preview';
+const requestedVersionCode = Number.parseInt(process.env.ROOMTONE_ANDROID_VERSION_CODE ?? '1', 10);
+const versionCode = Number.isFinite(requestedVersionCode) && requestedVersionCode > 0
+  ? Math.min(requestedVersionCode, 2_100_000_000)
+  : 1;
+const buildSha = process.env.EXPO_PUBLIC_BUILD_SHA
+  ?? process.env.EAS_BUILD_GIT_COMMIT_HASH
+  ?? 'local';
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'Roomtone',
+  name: isPreview ? 'Roomtone Preview' : 'Roomtone',
   slug: 'roomtone',
   version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
-  scheme: 'roomtone',
+  scheme: isPreview ? 'roomtone-preview' : 'roomtone',
+  extra: {
+    ...(config.extra ?? {}),
+    build: {
+      variant,
+      sha: buildSha,
+      channel: process.env.EXPO_PUBLIC_BUILD_CHANNEL ?? 'local',
+      builtAt: process.env.EXPO_PUBLIC_BUILD_TIME ?? 'local',
+      architecture: process.env.EXPO_PUBLIC_BUILD_ARCHITECTURE ?? 'universal'
+    }
+  },
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'com.otey247.roomtone',
+    bundleIdentifier: isPreview ? 'com.otey247.roomtone.preview' : 'com.otey247.roomtone',
     infoPlist: {
       NSMicrophoneUsageDescription: 'Roomtone uses the microphone only while you record a meeting.',
       UIBackgroundModes: ['audio']
     }
   },
   android: {
-    package: 'com.otey247.roomtone',
+    package: isPreview ? 'com.otey247.roomtone.preview' : 'com.otey247.roomtone',
+    versionCode,
+    allowBackup: false,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#F4F1EA'

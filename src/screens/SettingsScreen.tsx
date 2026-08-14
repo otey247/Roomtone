@@ -1,10 +1,16 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Button } from '../components/Button.tsx';
 import { ScrollScreen } from '../components/Screen.tsx';
 import { SectionHeader } from '../components/SectionHeader.tsx';
 import { SegmentedControl } from '../components/SegmentedControl.tsx';
 import type { AppSettings, ModelState, RuntimeKind } from '../domain/types.ts';
+import { copyText } from '../infrastructure/clipboard.ts';
+import {
+  collectDeviceDiagnostics,
+  formatDeviceDiagnosticReport,
+  type DeviceDiagnosticSnapshot
+} from '../infrastructure/device-diagnostics.ts';
 import { palette, radius, spacing, type as typography } from '../theme/tokens.ts';
 
 interface SettingsScreenProps {
@@ -19,8 +25,14 @@ interface SettingsScreenProps {
 export function SettingsScreen({ settings, models, onUpdateSettings, onInstallModel, onRemoveModel, onLoadSamples }: SettingsScreenProps) {
   const [loadingSamples, setLoadingSamples] = useState(false);
   const [operationError, setOperationError] = useState<string>();
+  const [diagnostics, setDiagnostics] = useState<DeviceDiagnosticSnapshot>();
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const speechModels = models.filter((model) => model.role === 'speech');
   const vadModels = models.filter((model) => model.role === 'vad');
+  const modelSignature = useMemo(
+    () => models.map((model) => `${model.id}:${model.installed}:${model.localUri ?? ''}`).join('|'),
+    [models]
+  );
 
   const run = async (operation: () => Promise<void>) => {
     setOperationError(undefined);
@@ -28,10 +40,30 @@ export function SettingsScreen({ settings, models, onUpdateSettings, onInstallMo
     catch (cause) { setOperationError(cause instanceof Error ? cause.message : 'The operation could not be completed.'); }
   };
 
+  const refreshDiagnostics = async () => {
+    setDiagnosticsLoading(true);
+    try {
+      setDiagnostics(await collectDeviceDiagnostics(settings, models));
+    } catch (cause) {
+      setOperationError(cause instanceof Error ? cause.message : 'Device diagnostics could not be collected.');
+    } finally {
+      setDiagnosticsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshDiagnostics();
+  }, [modelSignature, settings.activeSpeechModelId]);
+
   const loadSamples = async () => {
     setLoadingSamples(true);
     await run(onLoadSamples);
     setLoadingSamples(false);
+  };
+
+  const copyDiagnostics = async () => {
+    if (!diagnostics) return;
+    await run(() => copyText(formatDeviceDiagnosticReport(diagnostics)));
   };
 
   return (
@@ -79,6 +111,40 @@ export function SettingsScreen({ settings, models, onUpdateSettings, onInstallMo
       </View>
 
       <View style={styles.section}>
+        <SectionHeader title="APK and device diagnostics" detail="Confirms the installed binary and native runtime on this phone" />
+        {diagnostics ? (
+          <>
+            <View style={styles.diagnosticSummary}>
+              <Text style={styles.diagnosticTitle}>{diagnostics.application.name}</Text>
+              <Text style={styles.diagnosticMeta}>
+                {diagnostics.application.version} ({diagnostics.application.buildVersion}) · {diagnostics.application.applicationId}
+              </Text>
+              <Text style={styles.diagnosticMeta}>
+                {diagnostics.device.manufacturer} {diagnostics.device.modelName} · Android {diagnostics.device.osVersion} · API {diagnostics.device.apiLevel}
+              </Text>
+              <Text style={styles.diagnosticMeta}>
+                Build {diagnostics.application.buildSha.slice(0, 10)} · {diagnostics.application.buildVariant} · {diagnostics.application.architecture}
+              </Text>
+            </View>
+            <View style={styles.diagnosticList}>
+              {diagnostics.readiness.checks.map((check) => (
+                <DiagnosticRow key={check.id} label={check.label} status={check.status} detail={check.detail} />
+              ))}
+            </View>
+            <Text style={styles.readinessResult}>
+              Native meeting runtime: {diagnostics.readiness.nativeMeetingReady ? 'Ready to test' : 'Setup required'}
+            </Text>
+          </>
+        ) : (
+          <Text style={styles.settingDetail}>Collecting application and device information.</Text>
+        )}
+        <View style={styles.diagnosticActions}>
+          <Button label="Refresh diagnostics" variant="secondary" loading={diagnosticsLoading} style={styles.diagnosticButton} onPress={() => void refreshDiagnostics()} />
+          <Button label="Copy report" variant="secondary" disabled={!diagnostics || diagnosticsLoading} style={styles.diagnosticButton} onPress={() => void copyDiagnostics()} />
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <SectionHeader title="Local retention" detail="Applied when Roomtone initializes" />
         <SettingBlock label="Delete audio after">
           <SegmentedControl value={String(settings.deleteAudioAfterDays ?? 'never')} options={[{ value: 'never', label: 'Never' }, { value: '7', label: '7 days' }, { value: '30', label: '30 days' }]} onChange={(value) => void run(() => onUpdateSettings({ deleteAudioAfterDays: value === 'never' ? null : Number(value) }))} />
@@ -110,6 +176,19 @@ function ToggleRow({ label, detail, value, onChange }: { label: string; detail: 
     <View style={styles.toggleRow}>
       <View style={styles.toggleCopy}><Text style={styles.settingLabel}>{label}</Text><Text style={styles.settingDetail}>{detail}</Text></View>
       <Switch value={value} onValueChange={onChange} trackColor={{ false: palette.lineStrong, true: palette.dark }} thumbColor={palette.surface} />
+    </View>
+  );
+}
+
+function DiagnosticRow({ label, status, detail }: { label: string; status: 'ready' | 'warning' | 'blocked'; detail: string }) {
+  const statusLabel = status === 'ready' ? 'Ready' : status === 'warning' ? 'Needs setup' : 'Blocked';
+  return (
+    <View style={styles.diagnosticRow}>
+      <View style={styles.diagnosticCopy}>
+        <Text style={styles.settingLabel}>{label}</Text>
+        <Text style={styles.settingDetail}>{detail}</Text>
+      </View>
+      <Text style={styles.diagnosticStatus}>{statusLabel}</Text>
     </View>
   );
 }
@@ -154,6 +233,16 @@ const styles = StyleSheet.create({
   modelMeta: { ...typography.meta, color: palette.inkFaint },
   downloadText: { ...typography.meta, color: palette.ink },
   modelError: { ...typography.meta, color: palette.destructive },
+  diagnosticSummary: { gap: spacing.xs, padding: spacing.md, borderWidth: 1, borderColor: palette.line, borderRadius: radius.md, backgroundColor: palette.surface },
+  diagnosticTitle: { ...typography.subheading, color: palette.ink },
+  diagnosticMeta: { ...typography.meta, color: palette.inkSubtle },
+  diagnosticList: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.line },
+  diagnosticRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line },
+  diagnosticCopy: { flex: 1, gap: spacing.xxs },
+  diagnosticStatus: { ...typography.meta, color: palette.ink, fontWeight: '700', textAlign: 'right', maxWidth: 84 },
+  readinessResult: { ...typography.bodyStrong, color: palette.ink },
+  diagnosticActions: { flexDirection: 'row', gap: spacing.sm },
+  diagnosticButton: { flex: 1 },
   about: { gap: spacing.sm, paddingTop: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.line },
   aboutTitle: { ...typography.bodyStrong, color: palette.ink },
   aboutText: { ...typography.body, color: palette.inkSubtle }
