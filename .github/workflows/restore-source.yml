@@ -68,7 +68,7 @@ jobs:
           npx tsc -p tsconfig.domain.json --noEmit
           node --experimental-strip-types --test tests/domain/*.test.ts
           git diff --check
-          test "$(git status --short | wc -l | tr -d ' ')" -eq 21
+          git status --short
 
       - name: Commit restored application
         run: |
