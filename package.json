@@ -1,0 +1,58 @@
+{
+  "name": "roomtone",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "start:go": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild",
+    "prebuild:clean": "expo prebuild --clean",
+    "typecheck": "tsc --noEmit",
+    "typecheck:domain": "tsc -p tsconfig.domain.json --noEmit",
+    "test": "node --test tests/domain/*.test.ts",
+    "verify:repo": "node scripts/validate-repo.mjs",
+    "check": "npm run verify:repo && npm run typecheck:domain && npm test && npm run typecheck && npm run typecheck:test",
+    "doctor": "npx expo-doctor",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit"
+  },
+  "dependencies": {
+    "expo": "~56.0.19",
+    "expo-asset": "~56.0.22",
+    "expo-audio": "~56.0.13",
+    "expo-clipboard": "~56.0.4",
+    "expo-file-system": "~56.0.8",
+    "expo-keep-awake": "~56.0.3",
+    "expo-print": "~56.0.4",
+    "expo-sharing": "~56.0.22",
+    "expo-splash-screen": "~56.0.14",
+    "expo-sqlite": "~56.0.5",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-fs": "2.20.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "whisper.rn": "0.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-fs",
+          "whisper.rn"
+        ]
+      }
+    }
+  }
+}
