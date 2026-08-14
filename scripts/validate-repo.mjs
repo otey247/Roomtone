@@ -91,6 +91,9 @@ if (!apkWorkflow.includes('arm64-v8a')) {
 if (!apkWorkflow.includes('NODE_ENV: production')) {
   failures.push('The APK workflow must set NODE_ENV=production for release bundling.');
 }
+if (!apkWorkflow.includes('npm install --include=dev')) {
+  failures.push('The APK workflow must install development build tooling explicitly.');
+}
 if (!apkWorkflow.includes('actions/upload-artifact@v4')) {
   failures.push('The APK workflow must upload the installable artifact.');
 }

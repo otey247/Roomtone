@@ -53,7 +53,7 @@ try {
   $env:CI = 'true'
 
   if (-not $SkipDependencyInstall) {
-    & npm install --no-audit --no-fund
+    & npm install --include=dev --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { throw 'npm install failed.' }
   }
 
