@@ -78,7 +78,7 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
     });
 
     const whisperModuleId: string = 'whisper.rn';
-    const realtimeModuleId: string = 'whisper.rn/realtime-transcription';
+    const realtimeModuleId: string = 'whisper.rn/src/realtime-transcription';
     const [{ initWhisper, initWhisperVad }, realtimeModule, fsModule] = await Promise.all([
       import(whisperModuleId),
       import(realtimeModuleId),
