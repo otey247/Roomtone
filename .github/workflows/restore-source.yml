@@ -1,4 +1,4 @@
-name: Restore verified Roomtone source
+name: Capture Roomtone branch snapshot
 
 on:
   push:
@@ -9,96 +9,21 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: restore-roomtone-source
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  restore:
+  capture:
     runs-on: ubuntu-latest
     steps:
       - name: Check out branch
         uses: actions/checkout@v4
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
         with:
-          fetch-depth: 0
-
-      - name: Reconstruct verified source archive
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-
-          fetch_blob_text() {
-            local sha="$1"
-            curl --fail --silent --show-error \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${REPOSITORY}/git/blobs/${sha}" \
-              | jq -r '.content' \
-              | tr -d '\n' \
-              | base64 --decode
-          }
-
-          fetch_blob_text b419961e54e9ddc418c69659b4d2fdefd51b051d > /tmp/roomtone-source.part-1
-          fetch_blob_text b00694724265a81cb92f98e6c1e21b686c4b6e6f > /tmp/roomtone-source.part-2
-          cat /tmp/roomtone-source.part-1 /tmp/roomtone-source.part-2 > /tmp/roomtone-source.tar.gz.b64
-          base64 --decode /tmp/roomtone-source.tar.gz.b64 > /tmp/roomtone-source.tar.gz
-
-          gzip --test /tmp/roomtone-source.tar.gz
-          mkdir -p /tmp/roomtone-source
-          tar -xzf /tmp/roomtone-source.tar.gz -C /tmp/roomtone-source
-
-          missing_files=(
-            src/inference/expo-audio-stream-adapter.ts
-            src/inference/model-manager.ts
-            src/inference/whisper-provider.ts
-            src/infrastructure/clipboard.ts
-            src/infrastructure/database.ts
-            src/infrastructure/meeting-repository.ts
-            src/infrastructure/pdf.ts
-            src/screens/HomeScreen.tsx
-            src/screens/LibraryScreen.tsx
-            src/screens/LiveMeetingScreen.tsx
-            src/screens/MeetingDetailScreen.tsx
-            src/screens/NewMeetingScreen.tsx
-            src/screens/SettingsScreen.tsx
-            tests/domain/analytics.test.ts
-            tests/domain/fixtures.ts
-            tests/domain/insights.test.ts
-            tests/domain/keywords.test.ts
-            tests/domain/meeting.test.ts
-            tests/domain/speaker-clustering.test.ts
-          )
-
-          for target in "${missing_files[@]}"; do
-            source_path="$(find /tmp/roomtone-source -type f -path "*/${target}" -print -quit)"
-            if [[ -z "${source_path}" ]]; then
-              echo "Archive does not contain ${target}" >&2
-              find /tmp/roomtone-source -maxdepth 4 -type f | sort >&2
-              exit 1
-            fi
-            mkdir -p "$(dirname "${target}")"
-            cp "${source_path}" "${target}"
-          done
-
-          rm .github/workflows/restore-source.yml
-          node scripts/validate-repo.mjs
-          test "$(git status --short | wc -l | tr -d ' ')" -eq 20
-
-      - name: Commit restored source
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            src/inference \
-            src/infrastructure \
-            src/screens \
-            tests/domain \
-            .github/workflows/restore-source.yml
-          git commit -m "restore complete Roomtone application tree"
-          git push origin HEAD:agent/build-roomtone-mobile-app
+          name: roomtone-branch-source
+          path: |
+            .
+            !.git
+          include-hidden-files: true
+          retention-days: 1
