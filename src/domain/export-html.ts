@@ -1,11 +1,19 @@
 // Generates a local printable document only after an explicit user export action.
-import { escape } from 'html-escaper';
-import type { Meeting } from './types.ts';
+import type { ExportTemplate, Meeting } from './types.ts';
 import { meetingToPlainText } from './export-text.ts';
 
-export type ExportTemplate = 'brief' | 'minutes' | 'transcript' | 'actions';
-
+export type { ExportTemplate } from './types.ts';
 export { meetingToPlainText } from './export-text.ts';
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character] ?? character);
+}
 
 export function meetingToHtml(meeting: Meeting, template: ExportTemplate = 'brief'): string {
   const documentText = meetingToPlainText(meeting, template);
@@ -21,6 +29,6 @@ export function meetingToHtml(meeting: Meeting, template: ExportTemplate = 'brie
   pre { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 10.5pt; line-height: 1.5; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
-<body><pre>${escape(documentText)}</pre></body>
+<body><pre>${escapeHtml(documentText)}</pre></body>
 </html>`;
 }

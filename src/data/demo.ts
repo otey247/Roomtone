@@ -121,11 +121,7 @@ function rekeyMeeting(meeting: Meeting, suffix: string, title: string, offsetMs:
     })),
     insights: meeting.insights.map((insight) => ({ ...insight, id: `${insight.id}_${suffix}`, meetingId: id, segmentId: segmentMap.get(insight.segmentId)! })),
     bookmarks: meeting.bookmarks.map((bookmark) => ({ ...bookmark, id: `${bookmark.id}_${suffix}`, meetingId: id })),
-    metrics: {
-      ...meeting.metrics,
-      longestTurnSpeakerId: meeting.metrics.longestTurnSpeakerId ? speakerMap.get(meeting.metrics.longestTurnSpeakerId) : undefined,
-      speakers: meeting.metrics.speakers.map((metric) => ({ ...metric, speakerId: speakerMap.get(metric.speakerId)! }))
-    }
+    metrics: { ...meeting.metrics }
   };
 }
 
