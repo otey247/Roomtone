@@ -9,11 +9,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
   scheme: 'roomtone',
-  splash: {
-    image: './assets/splash.png',
-    resizeMode: 'contain',
-    backgroundColor: '#F4F1EA'
-  },
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.otey247.roomtone',
@@ -40,6 +35,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ['expo-audio', {
       microphonePermission: 'Roomtone uses the microphone only while you record a meeting.',
       enableBackgroundRecording: true
+    }],
+    ['expo-splash-screen', {
+      image: './assets/splash.png',
+      imageWidth: 240,
+      resizeMode: 'contain',
+      backgroundColor: '#F4F1EA'
     }]
   ]
 });

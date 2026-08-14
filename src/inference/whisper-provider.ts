@@ -11,16 +11,20 @@ interface RealtimeEvent {
   recordingTime?: number;
   vadEvent?: { timestamp?: number; duration?: number; type?: string };
 }
+interface WhisperContextHandle {
+  transcribeData(data: ArrayBuffer, options: Record<string, unknown>): { promise: Promise<WhisperResult> };
+  release?: () => Promise<void>;
+}
+interface VadContextHandle {
+  release?: () => Promise<void>;
+}
 
 export class WhisperMeetingRuntime implements MeetingRuntime {
   readonly kind = 'native' as const;
   private callbacks?: RuntimeCallbacks;
   private transcriber?: { start(): Promise<void>; stop(): Promise<void>; release?: () => Promise<void> };
-  private whisperContext?: {
-    transcribeData(data: ArrayBuffer, options: Record<string, unknown>): { promise: Promise<WhisperResult> };
-    release?: () => Promise<void>;
-  };
-  private vadContext?: { release?: () => Promise<void> };
+  private whisperContext?: WhisperContextHandle;
+  private vadContext?: VadContextHandle;
   private audioUri?: string;
   private meetingId = '';
   private sourceLanguage = 'auto';
@@ -88,12 +92,12 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
     this.whisperContext = await initWhisper({
       filePath: speechModel.localUri,
       useGpu: true
-    }) as unknown as typeof this.whisperContext;
+    }) as unknown as WhisperContextHandle;
     this.vadContext = await initWhisperVad({
       filePath: vadModel.localUri,
       useGpu: true,
       nThreads: 4
-    }) as unknown as typeof this.vadContext;
+    }) as unknown as VadContextHandle;
 
     const audioStream = options.audioStream;
     if (!audioStream) throw new Error('The native PCM audio stream is unavailable.');
