@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "expo": "~56.0.19",
+    "expo-asset": "~56.0.22",
     "expo-audio": "~56.0.13",
     "expo-clipboard": "~56.0.4",
     "expo-file-system": "~56.0.8",
@@ -43,5 +44,15 @@
   },
   "engines": {
     "node": ">=22.18.0"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-fs",
+          "whisper.rn"
+        ]
+      }
+    }
   }
 }
