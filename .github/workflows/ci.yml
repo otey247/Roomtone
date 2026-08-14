@@ -1,0 +1,35 @@
+name: Roomtone CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Validate repository contract
+        run: npm run verify:repo
+      - name: Type-check application
+        run: npm run typecheck
+      - name: Type-check tests
+        run: npm run typecheck:test
+      - name: Run deterministic tests
+        run: npm test
+      - name: Check Expo dependency health
+        run: npm run doctor
+      - name: Validate Android native generation
+        run: npx expo prebuild --no-install --platform android

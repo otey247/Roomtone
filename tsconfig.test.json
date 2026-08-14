@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.domain.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/domain/**/*.ts", "src/data/demo.ts", "src/utils/**/*.ts", "tests/domain/**/*.ts"]
+}
