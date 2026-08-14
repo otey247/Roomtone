@@ -52,6 +52,7 @@ if (!packageJson.scripts?.['apk:install:s24']) failures.push('package.json must 
 if (!packageJson.scripts?.['apk:diagnostics:s24']) failures.push('package.json must expose the Samsung S24 diagnostics script.');
 if (!packageJson.dependencies?.['expo-audio']) failures.push('expo-audio is required for the native PCM stream.');
 if (!packageJson.dependencies?.['whisper.rn']) failures.push('whisper.rn is required for the native speech provider.');
+if (!packageJson.dependencies?.buffer) failures.push('buffer is required by whisper.rn safe-buffer during React Native release bundling.');
 if (!packageJson.dependencies?.['expo-application']) failures.push('expo-application is required for installed APK identity.');
 if (!packageJson.dependencies?.['expo-device']) failures.push('expo-device is required for physical-device diagnostics.');
 if (!packageJson.dependencies?.['expo-constants']) failures.push('expo-constants is required for embedded build metadata.');
