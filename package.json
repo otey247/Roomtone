@@ -13,7 +13,7 @@
     "prebuild:clean": "expo prebuild --clean",
     "typecheck": "tsc --noEmit",
     "typecheck:domain": "tsc -p tsconfig.domain.json --noEmit",
-    "test": "node --experimental-strip-types --test tests/domain/*.test.ts",
+    "test": "node --test tests/domain/*.test.ts",
     "verify:repo": "node scripts/validate-repo.mjs",
     "check": "npm run verify:repo && npm run typecheck:domain && npm test && npm run typecheck && npm run typecheck:test",
     "doctor": "npx expo-doctor",
@@ -42,6 +42,6 @@
     "typescript": "~6.0.3"
   },
   "engines": {
-    "node": ">=20.19.4"
+    "node": ">=22.18.0"
   }
 }

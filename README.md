@@ -73,7 +73,7 @@ TinyDiarize detects anonymous turn changes. It does not identify a person and do
 
 ### Prerequisites
 
-- Node.js 20.19.4 or newer
+- Node.js 22.18.0 or newer
 - npm
 - Xcode for iOS native builds
 - Android Studio and the Android SDK for Android native builds
