@@ -43,6 +43,7 @@ try {
     }
   }
 
+  $env:NODE_ENV = 'production'
   $env:ROOMTONE_APP_VARIANT = 'preview'
   $env:ROOMTONE_ANDROID_VERSION_CODE = [string]$VersionCode
   $env:EXPO_PUBLIC_BUILD_SHA = $gitSha
@@ -121,7 +122,7 @@ try {
   Write-Host "APK: $targetApk"
   Write-Host "SHA-256: $($hash.Hash.ToLowerInvariant())"
   Write-Host ''
-  Write-Host "Install with:"
+  Write-Host 'Install with:'
   Write-Host "  npm run apk:install:s24 -- -ApkPath `"$targetApk`""
 } finally {
   Pop-Location

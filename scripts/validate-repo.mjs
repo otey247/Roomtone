@@ -10,6 +10,7 @@ const requiredFiles = [
   'App.tsx',
   'index.ts',
   'app.config.ts',
+  'babel.config.cjs',
   'eas.json',
   'package.json',
   'src/app/RoomtoneApp.tsx',
@@ -54,6 +55,12 @@ if (!packageJson.dependencies?.['whisper.rn']) failures.push('whisper.rn is requ
 if (!packageJson.dependencies?.['expo-application']) failures.push('expo-application is required for installed APK identity.');
 if (!packageJson.dependencies?.['expo-device']) failures.push('expo-device is required for physical-device diagnostics.');
 if (!packageJson.dependencies?.['expo-constants']) failures.push('expo-constants is required for embedded build metadata.');
+if (!packageJson.devDependencies?.['babel-preset-expo']) failures.push('babel-preset-expo must be a direct development dependency for release bundling.');
+
+const babelConfig = readFileSync('babel.config.cjs', 'utf8');
+if (!babelConfig.includes("presets: ['babel-preset-expo']")) {
+  failures.push('babel.config.cjs must use babel-preset-expo.');
+}
 
 const easJson = JSON.parse(readFileSync('eas.json', 'utf8'));
 if (easJson.build?.['s24-apk']?.android?.buildType !== 'apk') {
@@ -80,6 +87,9 @@ if (!apkWorkflow.includes(':app:assembleRelease')) {
 }
 if (!apkWorkflow.includes('arm64-v8a')) {
   failures.push('The APK workflow must build the Samsung S24 arm64 architecture.');
+}
+if (!apkWorkflow.includes('NODE_ENV: production')) {
+  failures.push('The APK workflow must set NODE_ENV=production for release bundling.');
 }
 if (!apkWorkflow.includes('actions/upload-artifact@v4')) {
   failures.push('The APK workflow must upload the installable artifact.');
