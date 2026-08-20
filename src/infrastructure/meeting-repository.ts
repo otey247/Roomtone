@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { meetingSearchText, type MeetingEvent } from '../domain/events.ts';
+import { normalizeMeeting } from '../domain/meeting.ts';
 import type { AppSettings, Meeting, SearchResult } from '../domain/types.ts';
 import { getDatabase } from './database.ts';
 
@@ -20,22 +21,28 @@ export async function initializeRepository(): Promise<void> {
   await getDatabase();
 }
 
+function parseMeeting(payload: string): Meeting | undefined {
+  try { return normalizeMeeting(JSON.parse(payload) as Meeting); }
+  catch { return undefined; }
+}
+
 export async function listMeetings(): Promise<Meeting[]> {
   const database = await getDatabase();
   const rows = await database.getAllAsync<{ payload: string }>('SELECT payload FROM meetings ORDER BY updated_at DESC');
   return rows.flatMap((row) => {
-    try { return [JSON.parse(row.payload) as Meeting]; } catch { return []; }
+    const meeting = parseMeeting(row.payload);
+    return meeting ? [meeting] : [];
   });
 }
 
 export async function getMeeting(id: string): Promise<Meeting | undefined> {
   const database = await getDatabase();
   const row = await database.getFirstAsync<{ payload: string }>('SELECT payload FROM meetings WHERE id = ?', id);
-  if (!row) return undefined;
-  try { return JSON.parse(row.payload) as Meeting; } catch { return undefined; }
+  return row ? parseMeeting(row.payload) : undefined;
 }
 
 export async function saveMeeting(meeting: Meeting): Promise<void> {
+  const normalized = normalizeMeeting(meeting);
   const database = await getDatabase();
   await database.runAsync(
     `INSERT INTO meetings(id, title, started_at, updated_at, status, search_text, payload)
@@ -47,20 +54,25 @@ export async function saveMeeting(meeting: Meeting): Promise<void> {
        status = excluded.status,
        search_text = excluded.search_text,
        payload = excluded.payload`,
-    meeting.id,
-    meeting.title,
-    meeting.startedAt,
-    meeting.updatedAt,
-    meeting.status,
-    meetingSearchText(meeting),
-    JSON.stringify(meeting)
+    normalized.id,
+    normalized.title,
+    normalized.startedAt,
+    normalized.updatedAt,
+    normalized.status,
+    meetingSearchText(normalized),
+    JSON.stringify(normalized)
   );
 }
 
 export async function deleteMeeting(id: string): Promise<void> {
   const existing = await getMeeting(id);
-  if (existing?.audioUri) {
-    await FileSystem.deleteAsync(existing.audioUri, { idempotent: true }).catch(() => undefined);
+  const localUris = new Set([
+    existing?.audioUri,
+    existing?.source?.normalizedAudioUri,
+    existing?.source?.uri
+  ].filter((value): value is string => Boolean(value?.startsWith('file://'))));
+  for (const uri of localUris) {
+    await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
   }
   const database = await getDatabase();
   await database.withTransactionAsync(async () => {
@@ -89,10 +101,7 @@ export async function searchMeetings(query: string): Promise<SearchResult[]> {
       segment.originalText.toLocaleLowerCase().includes(normalized)
       || segment.translatedText?.toLocaleLowerCase().includes(normalized)
     ).map((segment) => segment.id);
-    const generalMatch = meeting.title.toLocaleLowerCase().includes(normalized)
-      || meeting.summary?.toLocaleLowerCase().includes(normalized)
-      || meeting.speakers.some((speaker) => speaker.displayName.toLocaleLowerCase().includes(normalized))
-      || meeting.insights.some((insight) => insight.text.toLocaleLowerCase().includes(normalized));
+    const generalMatch = meetingSearchText(meeting).includes(normalized);
     return generalMatch || matchingSegmentIds.length ? [{ meeting, matchingSegmentIds }] : [];
   });
 }
