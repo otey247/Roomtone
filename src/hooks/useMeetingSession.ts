@@ -82,7 +82,11 @@ export function useMeetingSession(onPersisted: (meeting: Meeting) => void, audio
       const message = cause instanceof Error ? cause.message : 'Unable to start the meeting runtime.';
       setError(message);
       setRuntimeStatus('error');
-      const failed = finishMeeting(initial);
+      setRuntimeDetail(message);
+      try { await runtime.release(); } catch { /* best-effort cleanup after startup failure */ }
+      if (runtimeRef.current === runtime) runtimeRef.current = undefined;
+      const ended = finishMeeting(initial);
+      const failed: Meeting = { ...ended, status: 'failed', updatedAt: new Date().toISOString() };
       commit(failed);
       throw cause;
     }

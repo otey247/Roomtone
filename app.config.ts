@@ -14,7 +14,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: isPreview ? 'Roomtone Preview' : 'Roomtone',
   slug: 'roomtone',
-  version: '0.2.0',
+  version: '0.2.1',
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',

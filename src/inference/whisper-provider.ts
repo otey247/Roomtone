@@ -15,16 +15,52 @@ interface WhisperContextHandle {
   transcribeData(data: ArrayBuffer, options: Record<string, unknown>): { promise: Promise<WhisperResult> };
   release?: () => Promise<void>;
 }
-interface VadContextHandle {
+interface RawVadContextHandle {
+  detectSpeechData(data: ArrayBuffer, options: Record<string, unknown>): Promise<Array<{ t0: number; t1: number }>>;
   release?: () => Promise<void>;
+}
+interface RealtimeVadContextHandle {
+  processAudio(data: Uint8Array): void;
+  onSpeechStart(callback: (confidence: number, data: Uint8Array) => void): void;
+  onSpeechContinue(callback: (confidence: number, data: Uint8Array) => void): void;
+  onSpeechEnd(callback: (confidence: number) => void): void;
+  onError(callback: (error: string) => void): void;
+  updateOptions(options: Record<string, unknown>): void;
+  flush(): Promise<void>;
+  reset(): Promise<void>;
+}
+interface RealtimeTranscriberHandle {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  release?: () => Promise<void>;
+}
+type RealtimeTranscriberConstructor = new (
+  dependencies: Record<string, unknown>,
+  configuration: Record<string, unknown>,
+  callbacks: Record<string, unknown>
+) => RealtimeTranscriberHandle;
+type RingBufferVadConstructor = new (
+  rawVadContext: RawVadContextHandle,
+  options: Record<string, unknown>
+) => RealtimeVadContextHandle;
+
+function asErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function requireConstructor<T>(candidate: unknown, name: string): T {
+  if (typeof candidate !== 'function') {
+    throw new Error(`The realtime speech runtime is incomplete: ${name} is unavailable.`);
+  }
+  return candidate as T;
 }
 
 export class WhisperMeetingRuntime implements MeetingRuntime {
   readonly kind = 'native' as const;
   private callbacks?: RuntimeCallbacks;
-  private transcriber?: { start(): Promise<void>; stop(): Promise<void>; release?: () => Promise<void> };
+  private transcriber?: RealtimeTranscriberHandle;
   private whisperContext?: WhisperContextHandle;
-  private vadContext?: VadContextHandle;
+  private rawVadContext?: RawVadContextHandle;
   private audioUri?: string;
   private meetingId = '';
   private sourceLanguage = 'auto';
@@ -55,6 +91,7 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
     if (!vadModel?.installed || !vadModel.localUri) {
       throw new Error('Install the voice activity model before recording.');
     }
+
     this.callbacks = options.callbacks;
     this.meetingId = options.meeting.id;
     this.meetingStartedAtMs = new Date(options.meeting.startedAt).getTime();
@@ -66,90 +103,132 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
     this.sourceLanguage = options.meeting.sourceLanguage;
     this.translateToEnglish = options.meeting.translationMode === 'english';
     this.supportsSpeakerTurns = speechModel.supportsSpeakerTurns;
-    this.callbacks.onStatus('preparing', 'Loading local speech models');
+    this.callbacks.onStatus('preparing', 'Preparing microphone and local speech runtime');
 
-    const audio = await import('expo-audio');
-    const permission = await audio.requestRecordingPermissionsAsync();
-    if (!permission.granted) throw new Error('Microphone permission is required to record a meeting.');
-    await audio.setAudioModeAsync({
-      allowsRecording: true,
-      playsInSilentMode: true,
-      allowsBackgroundRecording: true
-    });
-
-    const whisperModuleId: string = 'whisper.rn';
-    const realtimeModuleId: string = 'whisper.rn/src/realtime-transcription';
-    const [{ initWhisper, initWhisperVad }, realtimeModule, fsModule] = await Promise.all([
-      import(whisperModuleId),
-      import(realtimeModuleId),
-      import('react-native-fs')
-    ]);
-    const RNFS = (fsModule.default ?? fsModule) as typeof import('react-native-fs');
-    const meetingDirectory = `${RNFS.DocumentDirectoryPath}/roomtone`;
-    if (!(await RNFS.exists(meetingDirectory))) await RNFS.mkdir(meetingDirectory);
-    this.audioUri = `file://${meetingDirectory}/${this.meetingId}.wav`;
-
-    this.whisperContext = await initWhisper({
-      filePath: speechModel.localUri,
-      useGpu: true
-    }) as unknown as WhisperContextHandle;
-    this.vadContext = await initWhisperVad({
-      filePath: vadModel.localUri,
-      useGpu: true,
-      nThreads: 4
-    }) as unknown as VadContextHandle;
-
-    const audioStream = options.audioStream;
-    if (!audioStream) throw new Error('The native PCM audio stream is unavailable.');
-    const RealtimeTranscriber = realtimeModule.RealtimeTranscriber as unknown as new (
-      dependencies: Record<string, unknown>,
-      configuration: Record<string, unknown>,
-      callbacks: Record<string, unknown>
-    ) => { start(): Promise<void>; stop(): Promise<void>; release?: () => Promise<void> };
-
-    this.transcriber = new RealtimeTranscriber(
-      {
-        whisperContext: this.whisperContext,
-        vadContext: this.vadContext,
-        audioStream,
-        fs: RNFS
-      },
-      {
-        audioSliceSec: 22,
-        audioMinSec: 1.2,
-        maxSlicesInMemory: 3,
-        audioOutputPath: this.audioUri.replace('file://', ''),
-        audioStreamConfig: {
-          sampleRate: 16_000,
-          channels: 1,
-          bitsPerSample: 16,
-          bufferSize: 16 * 1024
-        },
-        transcribeOptions: {
-          language: this.sourceLanguage || 'auto',
-          translate: false,
-          tokenTimestamps: true,
-          tdrzEnable: this.supportsSpeakerTurns,
-          maxThreads: 4
-        }
-      },
-      {
-        onBeginTranscribe: async ({ audioData, sliceIndex }: { audioData: Uint8Array; sliceIndex: number }) => {
-          this.audioBySlice.set(sliceIndex, audioData);
-          return true;
-        },
-        onTranscribe: (event: RealtimeEvent) => this.handleRealtimeEvent(event, speechModel),
-        onSliceTranscriptionStabilized: (text: string) => this.handleStableText(text, speechModel),
-        onVad: (event: { confidence?: number; type?: string }) => {
-          const level = event.type === 'silence' ? 0.04 : Math.max(0.12, Math.min(1, event.confidence ?? 0.45));
-          this.callbacks?.onAudioLevel(level);
-        },
-        onStatusChange: (active: boolean) => this.callbacks?.onStatus(active ? 'recording' : 'processing'),
-        onError: (message: string) => this.callbacks?.onError(new Error(message))
+    try {
+      const audio = await import('expo-audio');
+      if (typeof audio.requestRecordingPermissionsAsync !== 'function' || typeof audio.setAudioModeAsync !== 'function') {
+        throw new Error('This build does not contain the required Expo microphone runtime.');
       }
-    );
-    await this.transcriber.start();
-    this.callbacks.onStatus('recording', 'On-device Whisper');
+      const permission = await audio.requestRecordingPermissionsAsync();
+      if (!permission.granted) throw new Error('Microphone permission is required to record a meeting.');
+      await audio.setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        allowsBackgroundRecording: true
+      });
+
+      const whisperModuleId: string = 'whisper.rn';
+      // Use the package export that resolves to src/realtime-transcription/index.ts on React Native.
+      const realtimeModuleId: string = 'whisper.rn/realtime-transcription/index';
+      const [whisperModule, realtimeModule, fsModule] = await Promise.all([
+        import(whisperModuleId),
+        import(realtimeModuleId),
+        import('react-native-fs')
+      ]);
+
+      const initWhisper = whisperModule.initWhisper as unknown;
+      const initWhisperVad = whisperModule.initWhisperVad as unknown;
+      if (typeof initWhisper !== 'function' || typeof initWhisperVad !== 'function') {
+        throw new Error('This build does not contain the required Whisper initialization functions.');
+      }
+
+      const RealtimeTranscriber = requireConstructor<RealtimeTranscriberConstructor>(
+        realtimeModule.RealtimeTranscriber,
+        'RealtimeTranscriber'
+      );
+      const RingBufferVad = requireConstructor<RingBufferVadConstructor>(
+        realtimeModule.RingBufferVad,
+        'RingBufferVad'
+      );
+      const meetingVadPreset = realtimeModule.VAD_PRESETS?.meeting;
+      if (!meetingVadPreset || typeof meetingVadPreset !== 'object') {
+        throw new Error('The realtime speech runtime is incomplete: the meeting VAD preset is unavailable.');
+      }
+
+      const RNFS = (fsModule.default ?? fsModule) as typeof import('react-native-fs');
+      const meetingDirectory = `${RNFS.DocumentDirectoryPath}/roomtone`;
+      if (!(await RNFS.exists(meetingDirectory))) await RNFS.mkdir(meetingDirectory);
+      this.audioUri = `file://${meetingDirectory}/${this.meetingId}.wav`;
+
+      this.callbacks.onStatus('preparing', 'Loading local speech model');
+      this.whisperContext = await (initWhisper as (options: Record<string, unknown>) => Promise<WhisperContextHandle>)({
+        filePath: speechModel.localUri,
+        useGpu: true
+      });
+
+      this.callbacks.onStatus('preparing', 'Loading voice activity model');
+      this.rawVadContext = await (initWhisperVad as (options: Record<string, unknown>) => Promise<RawVadContextHandle>)({
+        filePath: vadModel.localUri,
+        useGpu: true,
+        nThreads: 4
+      });
+
+      // initWhisperVad returns a low-level context with detectSpeechData().
+      // RealtimeTranscriber does NOT consume that raw context directly. It expects
+      // RealtimeVadContextLike, whose event/callback contract is implemented by
+      // whisper.rn's RingBufferVad wrapper.
+      const realtimeVadContext = new RingBufferVad(this.rawVadContext, {
+        vadPreset: 'meeting',
+        vadOptions: meetingVadPreset,
+        sampleRate: 16_000,
+        preRecordingBufferMs: 1_200,
+        inferenceIntervalMs: 500
+      });
+
+      const audioStream = options.audioStream;
+      if (!audioStream) throw new Error('The native PCM audio stream is unavailable.');
+
+      this.transcriber = new RealtimeTranscriber(
+        {
+          whisperContext: this.whisperContext,
+          vadContext: realtimeVadContext,
+          audioStream,
+          fs: RNFS
+        },
+        {
+          audioSliceSec: 22,
+          audioMinSec: 1.2,
+          maxSlicesInMemory: 3,
+          audioOutputPath: this.audioUri.replace('file://', ''),
+          audioStreamConfig: {
+            sampleRate: 16_000,
+            channels: 1,
+            bitsPerSample: 16,
+            bufferSize: 16 * 1024
+          },
+          transcribeOptions: {
+            language: this.sourceLanguage || 'auto',
+            translate: false,
+            tokenTimestamps: true,
+            tdrzEnable: this.supportsSpeakerTurns,
+            maxThreads: 4
+          }
+        },
+        {
+          onBeginTranscribe: async ({ audioData, sliceIndex }: { audioData: Uint8Array; sliceIndex: number }) => {
+            this.audioBySlice.set(sliceIndex, audioData);
+            return true;
+          },
+          onTranscribe: (event: RealtimeEvent) => this.handleRealtimeEvent(event, speechModel),
+          onSliceTranscriptionStabilized: (text: string) => this.handleStableText(text, speechModel),
+          onVad: (event: { confidence?: number; type?: string }) => {
+            const level = event.type === 'silence' ? 0.04 : Math.max(0.12, Math.min(1, event.confidence ?? 0.45));
+            this.callbacks?.onAudioLevel(level);
+          },
+          onStatusChange: (active: boolean) => this.callbacks?.onStatus(active ? 'recording' : 'processing'),
+          onError: (message: string) => this.callbacks?.onError(new Error(message))
+        }
+      );
+
+      this.callbacks.onStatus('preparing', 'Starting microphone capture');
+      await this.transcriber.start();
+      this.callbacks.onStatus('recording', 'On-device Whisper');
+    } catch (error) {
+      const message = asErrorMessage(error);
+      this.callbacks?.onStatus('error', message);
+      throw new Error(`Live transcription could not start: ${message}`);
+    }
   }
 
   private handleRealtimeEvent(event: RealtimeEvent, model: ModelState): void {
@@ -266,7 +345,7 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
     } catch (error) {
       this.callbacks?.onStatus(
         'recording',
-        `Translation delayed: ${error instanceof Error ? error.message : 'unknown error'}`
+        `Translation delayed: ${asErrorMessage(error)}`
       );
     } finally {
       this.audioBySlice.delete(sliceIndex);
@@ -282,12 +361,12 @@ export class WhisperMeetingRuntime implements MeetingRuntime {
   }
 
   async release(): Promise<void> {
-    try { await this.transcriber?.release?.(); } catch { /* best-effort native release */ }
+    try { await this.transcriber?.release?.(); } catch { /* best-effort realtime release */ }
     try { await this.whisperContext?.release?.(); } catch { /* best-effort native release */ }
-    try { await this.vadContext?.release?.(); } catch { /* best-effort native release */ }
+    try { await this.rawVadContext?.release?.(); } catch { /* best-effort native release */ }
     this.transcriber = undefined;
     this.whisperContext = undefined;
-    this.vadContext = undefined;
+    this.rawVadContext = undefined;
     this.callbacks = undefined;
     this.audioBySlice.clear();
     this.lastPartialBySlice.clear();
