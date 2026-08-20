@@ -4,19 +4,27 @@ import { Button } from '../components/Button.tsx';
 import { ScrollScreen } from '../components/Screen.tsx';
 import { SegmentedControl } from '../components/SegmentedControl.tsx';
 import { TopBar } from '../components/TopBar.tsx';
-import type { AppSettings, MeetingDraft, ModelState, RuntimeKind, TranslationMode } from '../domain/types.ts';
+import type { AppSettings, CalendarEventContext, MeetingDraft, ModelState, RuntimeKind, SessionKind, TranslationMode } from '../domain/types.ts';
 import { palette, radius, spacing, type as typography } from '../theme/tokens.ts';
 
 interface NewMeetingScreenProps {
   settings: AppSettings;
   models: ModelState[];
+  mode?: 'meeting' | 'voice_note';
+  calendarEvent?: CalendarEventContext;
   onBack(): void;
   onStart(draft: MeetingDraft): Promise<void>;
 }
 
-export function NewMeetingScreen({ settings, models, onBack, onStart }: NewMeetingScreenProps) {
-  const [title, setTitle] = useState('');
-  const [runtime, setRuntime] = useState<RuntimeKind>(settings.defaultRuntime);
+function initialTitle(mode: 'meeting' | 'voice_note', event?: CalendarEventContext): string {
+  if (event) return event.title;
+  if (mode === 'voice_note') return `Voice note · ${new Date().toLocaleDateString()}`;
+  return '';
+}
+
+export function NewMeetingScreen({ settings, models, mode = 'meeting', calendarEvent, onBack, onStart }: NewMeetingScreenProps) {
+  const [title, setTitle] = useState(initialTitle(mode, calendarEvent));
+  const [runtime, setRuntime] = useState<RuntimeKind>(mode === 'voice_note' ? 'native' : settings.defaultRuntime);
   const [sourceLanguage, setSourceLanguage] = useState(settings.defaultLanguage);
   const [translationMode, setTranslationMode] = useState<TranslationMode>(settings.defaultTranslationMode);
   const [keywords, setKeywords] = useState('security, decision, action item');
@@ -29,6 +37,7 @@ export function NewMeetingScreen({ settings, models, onBack, onStart }: NewMeeti
   const nativeReady = Boolean(speech?.installed && vad?.installed);
   const canStart = consentAcknowledged && (runtime === 'demo' || nativeReady) && !starting;
   const keywordList = useMemo(() => keywords.split(',').map((term) => term.trim()).filter(Boolean), [keywords]);
+  const kind: SessionKind = mode === 'voice_note' ? 'voice_note' : 'meeting';
 
   const start = async () => {
     if (!canStart) return;
@@ -41,28 +50,41 @@ export function NewMeetingScreen({ settings, models, onBack, onStart }: NewMeeti
         sourceLanguage: sourceLanguage.trim() || 'auto',
         translationMode,
         keywords: keywordList,
-        consentAcknowledged
+        consentAcknowledged,
+        kind,
+        calendarEvent,
+        tags: calendarEvent ? ['calendar'] : []
       });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to start the meeting.');
+      setError(cause instanceof Error ? cause.message : 'Unable to start the session.');
       setStarting(false);
     }
   };
 
+  const noun = mode === 'voice_note' ? 'voice note' : 'meeting';
   return (
     <View style={styles.root}>
-      <TopBar title="New meeting" onBack={onBack} />
+      <TopBar title={`New ${noun}`} onBack={onBack} />
       <ScrollScreen>
         <View style={styles.intro}>
-          <Text style={styles.title}>Prepare the room.</Text>
-          <Text style={styles.detail}>Choose how Roomtone should listen, what to highlight, and confirm that everyone has been told recording is active.</Text>
+          <Text style={styles.title}>{mode === 'voice_note' ? 'Capture the thought.' : 'Prepare the room.'}</Text>
+          <Text style={styles.detail}>{mode === 'voice_note' ? 'Record an offline thought, interview, field note, or conversation and turn it into the same reusable intelligence workspace.' : 'Choose how Roomtone should listen, what to highlight, and confirm that everyone has been told recording is active.'}</Text>
         </View>
 
-        <Field label="Meeting title">
-          <TextInput value={title} onChangeText={setTitle} placeholder="Architecture review" placeholderTextColor={palette.inkFaint} style={styles.input} returnKeyType="done" />
+        {calendarEvent ? (
+          <View style={styles.calendarContext}>
+            <Text style={styles.calendarEyebrow}>Calendar context</Text>
+            <Text style={styles.calendarTitle}>{calendarEvent.title}</Text>
+            <Text style={styles.calendarMeta}>{new Date(calendarEvent.startAt).toLocaleString()} · {calendarEvent.attendees.length} expected participant{calendarEvent.attendees.length === 1 ? '' : 's'}</Text>
+            {calendarEvent.attendees.length ? <Text style={styles.calendarAttendees}>{calendarEvent.attendees.join(', ')}</Text> : null}
+          </View>
+        ) : null}
+
+        <Field label="Session title">
+          <TextInput value={title} onChangeText={setTitle} placeholder={mode === 'voice_note' ? 'Idea, interview, field note' : 'Architecture review'} placeholderTextColor={palette.inkFaint} style={styles.input} returnKeyType="done" />
         </Field>
 
-        <Field label="Capture mode" detail="Guided demo works in Expo Go. On-device audio requires a native build and downloaded models.">
+        <Field label="Capture mode" detail="Guided demo works without local models. On-device audio uses the phone microphone and downloaded models.">
           <SegmentedControl<RuntimeKind> value={runtime} options={[{ value: 'demo', label: 'Guided demo' }, { value: 'native', label: 'On-device audio' }]} onChange={setRuntime} />
           {runtime === 'native' ? (
             <View style={styles.readiness}>
@@ -73,7 +95,7 @@ export function NewMeetingScreen({ settings, models, onBack, onStart }: NewMeeti
           ) : null}
         </Field>
 
-        <Field label="Spoken language" detail="Use auto for multilingual meetings or enter a Whisper language code such as en, es, fr, or de.">
+        <Field label="Spoken language" detail="Use auto for multilingual sessions or enter a Whisper language code such as en, es, fr, or de.">
           <TextInput value={sourceLanguage} onChangeText={setSourceLanguage} placeholder="auto" placeholderTextColor={palette.inkFaint} autoCapitalize="none" autoCorrect={false} style={styles.input} />
         </Field>
 
@@ -89,13 +111,13 @@ export function NewMeetingScreen({ settings, models, onBack, onStart }: NewMeeti
         <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: consentAcknowledged }} onPress={() => setConsentAcknowledged((value) => !value)} style={styles.consent}>
           <View style={[styles.checkbox, consentAcknowledged && styles.checkboxChecked]}>{consentAcknowledged ? <Text style={styles.check}>✓</Text> : null}</View>
           <View style={styles.consentCopy}>
-            <Text style={styles.consentTitle}>Everyone has been notified</Text>
-            <Text style={styles.consentText}>I have told participants that Roomtone will record and analyze this meeting. I understand that recording laws and organizational policies still apply.</Text>
+            <Text style={styles.consentTitle}>{mode === 'voice_note' ? 'Recording is appropriate and visible' : 'Everyone has been notified'}</Text>
+            <Text style={styles.consentText}>{mode === 'voice_note' ? 'I understand that Roomtone records the microphone and that I am responsible for consent, privacy, and organizational policy.' : 'I have told participants that Roomtone will record and analyze this meeting. Recording laws and organizational policies still apply.'}</Text>
           </View>
         </Pressable>
 
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-        <Button label={starting ? 'Starting meeting' : 'Start meeting'} loading={starting} disabled={!canStart} fullWidth onPress={() => void start()} />
+        <Button label={starting ? `Starting ${noun}` : `Start ${noun}`} loading={starting} disabled={!canStart} fullWidth onPress={() => void start()} />
       </ScrollScreen>
     </View>
   );
@@ -114,6 +136,11 @@ const styles = StyleSheet.create({
   intro: { gap: spacing.sm, marginBottom: spacing.xl },
   title: { ...typography.heading, color: palette.ink },
   detail: { ...typography.body, color: palette.inkSubtle },
+  calendarContext: { gap: spacing.xs, padding: spacing.md, marginBottom: spacing.xl, borderWidth: 1, borderColor: palette.lineStrong, borderRadius: radius.md, backgroundColor: palette.surface },
+  calendarEyebrow: { ...typography.eyebrow, color: palette.inkSubtle },
+  calendarTitle: { ...typography.subheading, color: palette.ink },
+  calendarMeta: { ...typography.meta, color: palette.inkSubtle },
+  calendarAttendees: { ...typography.body, color: palette.ink },
   field: { gap: spacing.sm, marginBottom: spacing.xl },
   label: { ...typography.subheading, color: palette.ink },
   fieldDetail: { ...typography.meta, color: palette.inkSubtle },
