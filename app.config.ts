@@ -14,7 +14,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: isPreview ? 'Roomtone Preview' : 'Roomtone',
   slug: 'roomtone',
-  version: '0.1.0',
+  version: '0.2.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
@@ -33,7 +33,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: true,
     bundleIdentifier: isPreview ? 'com.otey247.roomtone.preview' : 'com.otey247.roomtone',
     infoPlist: {
-      NSMicrophoneUsageDescription: 'Roomtone uses the microphone only while you record a meeting.',
+      NSMicrophoneUsageDescription: 'Roomtone uses the microphone only while you record a visibly acknowledged session.',
+      NSCalendarsUsageDescription: 'Roomtone reads selected calendar events so recordings can use the correct title and participant context.',
+      NSCalendarsFullAccessUsageDescription: 'Roomtone reads selected calendar events so recordings can use the correct title and participant context.',
       UIBackgroundModes: ['audio']
     }
   },
@@ -49,15 +51,22 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.RECORD_AUDIO',
       'android.permission.FOREGROUND_SERVICE',
       'android.permission.FOREGROUND_SERVICE_MICROPHONE',
-      'android.permission.POST_NOTIFICATIONS'
+      'android.permission.POST_NOTIFICATIONS',
+      'android.permission.READ_CALENDAR',
+      'android.permission.WRITE_CALENDAR'
     ]
   },
   web: { favicon: './assets/favicon.png' },
   plugins: [
     ['expo-audio', {
-      microphonePermission: 'Roomtone uses the microphone only while you record a meeting.',
-      enableBackgroundRecording: true
+      microphonePermission: 'Roomtone uses the microphone only while you record a visibly acknowledged session.',
+      enableBackgroundRecording: true,
+      enableBackgroundPlayback: true
     }],
+    ['expo-calendar', {
+      calendarPermission: 'Roomtone reads selected calendar events so recordings can use the correct title and participant context.'
+    }],
+    'expo-document-picker',
     ['expo-splash-screen', {
       image: './assets/splash.png',
       imageWidth: 240,
