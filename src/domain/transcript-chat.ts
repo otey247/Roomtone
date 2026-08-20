@@ -10,10 +10,12 @@ import type {
 } from './types.ts';
 
 const ignored = new Set([
-  'about', 'after', 'all', 'and', 'any', 'are', 'can', 'could', 'did', 'does', 'for',
-  'from', 'have', 'how', 'into', 'meeting', 'more', 'said', 'say', 'that', 'the', 'their',
-  'them', 'there', 'these', 'they', 'this', 'those', 'was', 'were', 'what', 'when', 'where',
-  'which', 'who', 'will', 'with', 'would', 'you', 'your'
+  'about', 'after', 'agreed', 'all', 'and', 'any', 'are', 'around', 'came', 'come',
+  'coming', 'can', 'could', 'detail', 'details', 'did', 'does', 'for', 'from', 'have',
+  'how', 'into', 'issue', 'issues', 'keep', 'meeting', 'more', 'said', 'say', 'that',
+  'the', 'their', 'them', 'there', 'these', 'they', 'thing', 'things', 'this', 'those',
+  'up', 'was', 'were', 'what', 'when', 'where', 'which', 'who', 'will', 'with', 'would',
+  'you', 'your'
 ]);
 
 function normalizedTokens(value: string): string[] {
@@ -45,10 +47,10 @@ function uniqueCitations(citations: TranscriptCitation[]): TranscriptCitation[] 
 }
 
 function kindFromQuestion(question: string): InsightKind | undefined {
-  if (/\b(?:action|task|next step|follow[- ]?up|commitment)\b/i.test(question)) return 'action';
-  if (/\b(?:decision|decided|agreed|approved)\b/i.test(question)) return 'decision';
-  if (/\b(?:risk|blocker|blocked|concern|dependency)\b/i.test(question)) return 'risk';
-  if (/\b(?:open question|unresolved|question)\b/i.test(question)) return 'question';
+  if (/\b(?:actions?|tasks?|next steps?|follow[- ]?ups?|commitments?)\b/i.test(question)) return 'action';
+  if (/\b(?:decisions?|decided|approved)\b/i.test(question)) return 'decision';
+  if (/\b(?:risks?|blockers?|blocked|concerns?|dependencies?)\b/i.test(question)) return 'risk';
+  if (/\b(?:open questions?|unresolved|questions?)\b/i.test(question)) return 'question';
   return undefined;
 }
 
