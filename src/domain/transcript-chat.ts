@@ -48,7 +48,7 @@ function uniqueCitations(citations: TranscriptCitation[]): TranscriptCitation[] 
 
 function kindFromQuestion(question: string): InsightKind | undefined {
   if (/\b(?:actions?|tasks?|next steps?|follow[- ]?ups?|commitments?)\b/i.test(question)) return 'action';
-  if (/\b(?:decisions?|decided|agreed|approved)\b/i.test(question)) return 'decision';
+  if (/\b(?:decisions?|decided|approved)\b/i.test(question)) return 'decision';
   if (/\b(?:risks?|blockers?|blocked|concerns?|dependencies?)\b/i.test(question)) return 'risk';
   if (/\b(?:open questions?|unresolved|questions?)\b/i.test(question)) return 'question';
   return undefined;
